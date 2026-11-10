@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,17 +19,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.FlashlightOff
+import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -92,10 +104,217 @@ fun CapabilitiesDeckScreen(
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. media_control(action)
+        // 1. Accessibility Global Actions (Home, Back, Recents, Notifications, Screenshot)
         item {
             CapabilitySectionCard(
                 number = "01",
+                signature = "global_action(target) // JarvisAccessibilityService",
+                subtitle = "Targets: \"home\", \"back\", \"recents\", \"notifications\", \"screenshot\" • Service Status: ${if (telemetry.isAccessibilityConnected) "CONNECTED" else "NOT ENABLED"}",
+                accentColor = ArcCyan
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!telemetry.isAccessibilityConnected) {
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                }
+                            },
+                            border = BorderStroke(1.dp, AmberWarning),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.testTag("open_accessibility_settings_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessibilityNew,
+                                contentDescription = "Enable Accessibility Service",
+                                tint = AmberWarning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ENABLE JARVIS IN ACCESSIBILITY SETTINGS",
+                                color = AmberWarning,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HudActionButton(
+                            label = "GO HOME",
+                            icon = Icons.Default.Home,
+                            accent = ArcCyan,
+                            testTag = "cap_global_home",
+                            onClick = {
+                                onTriggerCapability(
+                                    JarvisIntentType.GLOBAL_ACTION,
+                                    "home",
+                                    "JARVIS, go to the home screen",
+                                    "Returning to the home screen, Sir."
+                                )
+                            }
+                        )
+                        HudActionButton(
+                            label = "GO BACK",
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            accent = ArcCyan,
+                            testTag = "cap_global_back",
+                            onClick = {
+                                onTriggerCapability(
+                                    JarvisIntentType.GLOBAL_ACTION,
+                                    "back",
+                                    "JARVIS, go back",
+                                    "Navigating back, Sir."
+                                )
+                            }
+                        )
+                        HudActionButton(
+                            label = "RECENTS",
+                            icon = Icons.Default.ViewCarousel,
+                            accent = ArcCyan,
+                            testTag = "cap_global_recents",
+                            onClick = {
+                                onTriggerCapability(
+                                    JarvisIntentType.GLOBAL_ACTION,
+                                    "recents",
+                                    "Open recent apps",
+                                    "Opening recent applications, Sir."
+                                )
+                            }
+                        )
+                        HudActionButton(
+                            label = "NOTIFICATIONS",
+                            icon = Icons.Default.Notifications,
+                            accent = ArcCyan,
+                            testTag = "cap_global_notifications",
+                            onClick = {
+                                onTriggerCapability(
+                                    JarvisIntentType.GLOBAL_ACTION,
+                                    "notifications",
+                                    "Open my notifications",
+                                    "Expanding the notification shade, Sir."
+                                )
+                            }
+                        )
+                        HudActionButton(
+                            label = "TAKE SCREENSHOT",
+                            icon = Icons.Default.CameraAlt,
+                            accent = TelemetryEmerald,
+                            testTag = "cap_global_screenshot",
+                            onClick = {
+                                onTriggerCapability(
+                                    JarvisIntentType.GLOBAL_ACTION,
+                                    "screenshot",
+                                    "JARVIS, take a screenshot",
+                                    "Capturing your screen now, Sir."
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Screen Gestures: dispatchGesture (Tap & Swipe) + Flashlight
+        item {
+            CapabilitySectionCard(
+                number = "02",
+                signature = "tap(x,y) & swipe(direction) & flashlight(mode)",
+                subtitle = "Dispatches GestureDescription paths via AccessibilityService & toggles CameraManager torch",
+                accentColor = Color(0xFFFF80AB)
+            ) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    HudActionButton(
+                        label = "TAP (540, 960)",
+                        icon = Icons.Default.TouchApp,
+                        accent = Color(0xFFFF80AB),
+                        testTag = "cap_gesture_tap",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.TAP,
+                                "540,960",
+                                "Tap the center of the screen",
+                                "Tapping screen coordinates 540 by 960, Sir."
+                            )
+                        }
+                    )
+                    HudActionButton(
+                        label = "SWIPE UP",
+                        icon = Icons.Default.Swipe,
+                        accent = Color(0xFFFF80AB),
+                        testTag = "cap_gesture_swipe_up",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.SWIPE,
+                                "up",
+                                "Swipe up on the screen",
+                                "Scrolling up, Sir."
+                            )
+                        }
+                    )
+                    HudActionButton(
+                        label = "SWIPE DOWN",
+                        icon = Icons.Default.Swipe,
+                        accent = Color(0xFFFF80AB),
+                        testTag = "cap_gesture_swipe_down",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.SWIPE,
+                                "down",
+                                "Swipe down on the screen",
+                                "Scrolling down, Sir."
+                            )
+                        }
+                    )
+                    HudActionButton(
+                        label = "FLASHLIGHT ON",
+                        icon = Icons.Default.FlashlightOn,
+                        accent = AmberWarning,
+                        testTag = "cap_flashlight_on",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.FLASHLIGHT,
+                                "on",
+                                "Turn on the flashlight",
+                                "Flashlight activated, Sir."
+                            )
+                        }
+                    )
+                    HudActionButton(
+                        label = "FLASHLIGHT OFF",
+                        icon = Icons.Default.FlashlightOff,
+                        accent = AmberWarning,
+                        testTag = "cap_flashlight_off",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.FLASHLIGHT,
+                                "off",
+                                "Turn off the flashlight",
+                                "Flashlight deactivated, Sir."
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        // 3. media_control(action)
+        item {
+            CapabilitySectionCard(
+                number = "03",
                 signature = "media_control(action)",
                 subtitle = "Actions: \"play\", \"pause\", \"next\", \"previous\" • Dispatches Android KeyEvent 126/127/87/88",
                 accentColor = ArcCyan
@@ -165,12 +384,12 @@ fun CapabilitiesDeckScreen(
             }
         }
 
-        // 2. adjust_volume(direction)
+        // 4. adjust_volume(direction)
         item {
             CapabilitySectionCard(
-                number = "02",
+                number = "04",
                 signature = "adjust_volume(direction)",
-                subtitle = "Directions: \"up\", \"down\", \"mute\" • Current STREAM_MUSIC: ${telemetry.volumeCurrent}/${telemetry.volumeMax} (${telemetry.volumePercent}%)",
+                subtitle = "Directions: \"up\", \"down\", \"mute\", \"ring_up\", \"ring_down\" • Current Media Volume: ${telemetry.volumeCurrent}/${telemetry.volumeMax} (${telemetry.volumePercent}%)",
                 accentColor = TelemetryEmerald
             ) {
                 FlowRow(
@@ -179,7 +398,7 @@ fun CapabilitiesDeckScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     HudActionButton(
-                        label = "VOLUME UP",
+                        label = "MEDIA VOL UP",
                         icon = Icons.AutoMirrored.Filled.VolumeUp,
                         accent = TelemetryEmerald,
                         testTag = "cap_vol_up",
@@ -188,12 +407,12 @@ fun CapabilitiesDeckScreen(
                                 JarvisIntentType.ADJUST_VOLUME,
                                 "up",
                                 "JARVIS, raise the volume",
-                                "Increasing audio volume, Sir."
+                                "Increasing media volume, Sir."
                             )
                         }
                     )
                     HudActionButton(
-                        label = "VOLUME DOWN",
+                        label = "MEDIA VOL DOWN",
                         icon = Icons.AutoMirrored.Filled.VolumeDown,
                         accent = TelemetryEmerald,
                         testTag = "cap_vol_down",
@@ -202,12 +421,12 @@ fun CapabilitiesDeckScreen(
                                 JarvisIntentType.ADJUST_VOLUME,
                                 "down",
                                 "JARVIS, lower the volume",
-                                "Lowering audio volume, Sir."
+                                "Lowering media volume, Sir."
                             )
                         }
                     )
                     HudActionButton(
-                        label = "MUTE",
+                        label = "MUTE AUDIO",
                         icon = Icons.AutoMirrored.Filled.VolumeOff,
                         accent = AmberWarning,
                         testTag = "cap_vol_mute",
@@ -220,26 +439,35 @@ fun CapabilitiesDeckScreen(
                             )
                         }
                     )
+                    HudActionButton(
+                        label = "RING VOL UP",
+                        icon = Icons.AutoMirrored.Filled.VolumeUp,
+                        accent = ArcCyan,
+                        testTag = "cap_ring_up",
+                        onClick = {
+                            onTriggerCapability(
+                                JarvisIntentType.ADJUST_VOLUME,
+                                "ring_up",
+                                "Raise the ringtone volume",
+                                "Increasing ringtone volume, Sir."
+                            )
+                        }
+                    )
                 }
             }
         }
 
-        // 3. device_status()
+        // 5. device_status() & type_text(text)
         item {
             CapabilitySectionCard(
-                number = "03",
-                signature = "device_status()",
-                subtitle = "Queries real-time Android BatteryManager & system clock",
-                accentColor = AmberWarning
+                number = "05",
+                signature = "device_status() & type_text(text)",
+                subtitle = "Queries BatteryManager diagnostics or injects text into active field & ClipboardManager",
+                accentColor = Color(0xFFE040FB)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Battery: ${telemetry.batteryPercent}% (${if (telemetry.isCharging) "Charging" else "Discharging"}) • Temp: ${telemetry.batteryTempCelsius}°C • Voltage: ${telemetry.batteryVoltageMv}mV • Time: ${telemetry.currentTimeFormatted}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = IceWhiteText
-                    )
                     HudActionButton(
-                        label = "RUN FULL DIAGNOSTIC SCAN",
+                        label = "RUN BATTERY & CLOCK DIAGNOSTIC",
                         icon = Icons.Default.BatteryChargingFull,
                         accent = AmberWarning,
                         testTag = "cap_device_status",
@@ -252,23 +480,11 @@ fun CapabilitiesDeckScreen(
                             )
                         }
                     )
-                }
-            }
-        }
 
-        // 4. type_text(text)
-        item {
-            CapabilitySectionCard(
-                number = "04",
-                signature = "type_text(text)",
-                subtitle = "Injects text into the active tablet field and system ClipboardManager",
-                accentColor = Color(0xFFE040FB)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = customTextToInject,
                         onValueChange = { customTextToInject = it },
-                        label = { Text("Text parameter to inject") },
+                        label = { Text("Text target to inject") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("type_text_param_input"),
@@ -340,12 +556,12 @@ fun CapabilitiesDeckScreen(
             }
         }
 
-        // 5. open_app(app_package_name)
+        // 6. open_app(app_package_name)
         item {
             CapabilitySectionCard(
-                number = "05",
-                signature = "open_app(app_package_name)",
-                subtitle = "Launches installed Android packages or standard tablet system targets",
+                number = "06",
+                signature = "open_app(app_name_or_package)",
+                subtitle = "Launches installed Android apps via PackageManager without root",
                 accentColor = ElectricCobalt
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -387,7 +603,7 @@ fun CapabilitiesDeckScreen(
                     if (installedApps.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Detected Launchable Tablet Packages (${installedApps.size}):",
+                            text = "Detected Launchable Apps on Device (${installedApps.size}):",
                             style = MaterialTheme.typography.labelMedium,
                             color = ArcCyan
                         )

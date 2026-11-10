@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,6 +35,10 @@ import java.util.Date
 import java.util.Locale
 
 private const val TAG = "JarvisViewModel"
+private const val PREFS_NAME = "jarvis_assistant_prefs"
+private const val KEY_CUSTOM_GEMINI_API_KEY = "custom_gemini_api_key"
+private const val KEY_VOICE_PITCH = "voice_pitch"
+private const val KEY_VOICE_RATE = "voice_rate"
 
 sealed interface JarvisAiState {
     data object Ready : JarvisAiState
@@ -46,11 +51,13 @@ sealed interface JarvisAiState {
 enum class JarvisTab {
     CONSOLE,
     CAPABILITIES,
-    SCHEMA_INSPECTOR
+    SCHEMA_INSPECTOR,
+    SETTINGS
 }
 
 class JarvisViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val actionExecutor = TabletActionExecutor(application.applicationContext)
 
     val voiceManager = JarvisVoiceManager(
@@ -65,26 +72,30 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     private val jarvisSchema = Schema.obj(
         properties = mapOf(
-            "intent" to Schema.enumeration(
+            "action" to Schema.enumeration(
                 values = listOf(
                     "open_app",
-                    "media_control",
+                    "global_action",
                     "adjust_volume",
+                    "flashlight",
+                    "tap",
+                    "swipe",
+                    "media_control",
                     "device_status",
                     "type_text",
-                    "general_response"
+                    "chat"
                 ),
-                description = "The system capability name to execute."
+                description = "The device action or capability for JARVIS to execute."
             ),
-            "parameter" to Schema.string(
-                description = "The parameter for the capability (package name, media action, volume direction, text to type, or null if not needed).",
+            "target" to Schema.string(
+                description = "Target parameter (app name/package, global action name, volume direction, flashlight state, x,y coordinates, swipe direction, text to type, or null).",
                 nullable = true
             ),
-            "speak" to Schema.string(
-                description = "What JARVIS will say back to the user."
+            "speech" to Schema.string(
+                description = "What JARVIS speaks out loud to the user."
             )
         ),
-        optionalProperties = listOf("parameter")
+        optionalProperties = listOf("target")
     )
 
     private val model by lazy {
@@ -125,6 +136,15 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     private val _commandLogs = MutableStateFlow<List<CommandLogEntry>>(emptyList())
     val commandLogs: StateFlow<List<CommandLogEntry>> = _commandLogs.asStateFlow()
 
+    private val _savedApiKey = MutableStateFlow(prefs.getString(KEY_CUSTOM_GEMINI_API_KEY, "").orEmpty())
+    val savedApiKey: StateFlow<String> = _savedApiKey.asStateFlow()
+
+    private val _voicePitch = MutableStateFlow(prefs.getFloat(KEY_VOICE_PITCH, 0.92f))
+    val voicePitch: StateFlow<Float> = _voicePitch.asStateFlow()
+
+    private val _voiceRate = MutableStateFlow(prefs.getFloat(KEY_VOICE_RATE, 1.04f))
+    val voiceRate: StateFlow<Float> = _voiceRate.asStateFlow()
+
     init {
         refreshTelemetry()
         _installedApps.value = actionExecutor.queryInstalledApps()
@@ -147,10 +167,28 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     fun selectTab(tab: JarvisTab) {
         _selectedTab.value = tab
-        if (tab == JarvisTab.CAPABILITIES) {
+        if (tab == JarvisTab.CAPABILITIES || tab == JarvisTab.SETTINGS) {
             _installedApps.value = actionExecutor.queryInstalledApps()
             refreshTelemetry()
         }
+    }
+
+    fun saveApiKeyToPrefs(apiKey: String) {
+        val trimmed = apiKey.trim()
+        prefs.edit().putString(KEY_CUSTOM_GEMINI_API_KEY, trimmed).apply()
+        _savedApiKey.value = trimmed
+    }
+
+    fun updateVoiceTuning(pitch: Float, rate: Float) {
+        val coercedPitch = pitch.coerceIn(0.5f, 1.5f)
+        val coercedRate = rate.coerceIn(0.6f, 1.6f)
+        prefs.edit()
+            .putFloat(KEY_VOICE_PITCH, coercedPitch)
+            .putFloat(KEY_VOICE_RATE, coercedRate)
+            .apply()
+        _voicePitch.value = coercedPitch
+        _voiceRate.value = coercedRate
+        voiceManager.setVoiceTuning(coercedPitch, coercedRate)
     }
 
     fun updateCommandInput(text: String) {
@@ -182,14 +220,13 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
         _commandInput.value = ""
 
-        // Check for local shutdown/exit loop commands matching the Python reference script
         val normalized = trimmed.lowercase(Locale.US)
         if (normalized in listOf("exit", "shutdown", "goodbye", "jarvis shutdown")) {
             val shutdownSpeak = "Shutting down core systems. Goodbye, Sir."
             val shutdownResponse = JarvisResponse(
-                intent = "general_response",
-                parameter = null,
-                speak = shutdownSpeak
+                action = "chat",
+                target = null,
+                speech = shutdownSpeak
             )
             val entry = CommandLogEntry(
                 id = System.currentTimeMillis(),
@@ -219,11 +256,11 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                     .joinToString(", ") { "${it.appName} (${it.packageName})" }
 
                 val contextualPrompt = buildString {
-                    appendLine("Current tablet telemetry: Battery ${_telemetry.value.batteryPercent}%, Local time ${_telemetry.value.currentTimeFormatted}, Volume ${_telemetry.value.volumeCurrent}/${_telemetry.value.volumeMax}.")
+                    appendLine("Current tablet telemetry: Battery ${_telemetry.value.batteryPercent}%, Local time ${_telemetry.value.currentTimeFormatted}, Volume ${_telemetry.value.volumeCurrent}/${_telemetry.value.volumeMax}, Flashlight=${if (_telemetry.value.isFlashlightOn) "ON" else "OFF"}, AccessibilityService=${if (_telemetry.value.isAccessibilityConnected) "CONNECTED" else "DISABLED"}.")
                     if (installedContext.isNotBlank()) {
-                        appendLine("Installed launchable tablet apps: $installedContext")
+                        appendLine("Installed launchable apps: $installedContext")
                     }
-                    append("User voice command: \"$trimmed\"")
+                    append("User command: \"$trimmed\"")
                 }
 
                 val response = withTimeout(60_000L) {
@@ -236,22 +273,27 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
-                // Direct JSON parsing without regex or code fence stripping per Firebase AI Logic guidelines
                 val jsonObject = JSONObject(rawJsonText)
-                val intentStr = jsonObject.optString("intent", "general_response")
-                val parameterVal = if (jsonObject.isNull("parameter")) {
-                    null
-                } else {
+                val actionStr = jsonObject.optString("action")
+                    .ifBlank { jsonObject.optString("intent", "chat") }
+                val targetVal = if (!jsonObject.isNull("target") && jsonObject.has("target")) {
+                    jsonObject.optString("target").takeIf {
+                        it.isNotBlank() && !it.equals("null", ignoreCase = true)
+                    }
+                } else if (!jsonObject.isNull("parameter") && jsonObject.has("parameter")) {
                     jsonObject.optString("parameter").takeIf {
                         it.isNotBlank() && !it.equals("null", ignoreCase = true)
                     }
+                } else {
+                    null
                 }
-                val speakStr = jsonObject.optString("speak", "Command processed, Sir.")
+                val speechStr = jsonObject.optString("speech")
+                    .ifBlank { jsonObject.optString("speak", "Command processed, Sir.") }
 
                 val parsedResponse = JarvisResponse(
-                    intent = intentStr,
-                    parameter = parameterVal,
-                    speak = speakStr
+                    action = actionStr,
+                    target = targetVal,
+                    speech = speechStr
                 )
 
                 val execResult = actionExecutor.executeCommand(
@@ -279,7 +321,7 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
                 _commandLogs.update { listOf(logEntry) + it }
                 _aiState.value = JarvisAiState.Success(logEntry)
-                voiceManager.speak(parsedResponse.speak)
+                voiceManager.speak(parsedResponse.speech)
             } catch (e: TimeoutCancellationException) {
                 Log.e(TAG, "JARVIS intent analysis timed out", e)
                 _aiState.value = JarvisAiState.Error(
@@ -296,10 +338,6 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /**
-     * Allows direct execution of a system capability from the Capabilities & Controls deck,
-     * generating the exact canonical JSON response and running the native tablet action immediately.
-     */
     fun triggerDirectCapability(
         intentType: JarvisIntentType,
         parameter: String?,
@@ -307,9 +345,9 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         speakMessage: String
     ) {
         val response = JarvisResponse(
-            intent = intentType.wireName,
-            parameter = parameter,
-            speak = speakMessage
+            action = intentType.wireName,
+            target = parameter,
+            speech = speakMessage
         )
         val execResult = actionExecutor.executeCommand(
             response = response,
@@ -335,62 +373,62 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     private fun seedInitialExamples() {
         val now = currentTimestamp()
         val sample1 = JarvisResponse(
-            intent = "media_control",
-            parameter = "play",
-            speak = "Playing your media, Sir."
+            action = "open_app",
+            target = "com.google.android.youtube",
+            speech = "Opening YouTube right away, Sir."
         )
         val sample2 = JarvisResponse(
-            intent = "open_app",
-            parameter = "com.google.android.youtube",
-            speak = "Opening YouTube right away."
+            action = "global_action",
+            target = "screenshot",
+            speech = "Capturing your screen now, Sir."
         )
         val sample3 = JarvisResponse(
-            intent = "general_response",
-            parameter = null,
-            speak = "Checking the latest sports data for you, Sir."
+            action = "media_control",
+            target = "play",
+            speech = "Playing your media, Sir."
         )
 
         _commandLogs.value = listOf(
             CommandLogEntry(
                 id = 3L,
                 timestamp = now,
-                userCommand = "JARVIS, play some music",
+                userCommand = "Open YouTube",
                 isVoiceOrigin = true,
                 response = sample1,
                 rawJson = sample1.toRawJsonString(pretty = true),
                 executionResult = ExecutionResult(
                     executed = true,
-                    actionSummary = "Media Transport: PLAY (KeyCode 126)",
-                    technicalDetail = "Ready to dispatch KeyEvent.KEYCODE_MEDIA_PLAY via AudioManager.",
-                    shellCommandTrace = "input keyevent 126"
+                    actionSummary = "Target Package: com.google.android.youtube",
+                    technicalDetail = "Resolved via JarvisAccessibilityService.openAppByName(PackageManager).",
+                    shellCommandTrace = "monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1"
                 )
             ),
             CommandLogEntry(
                 id = 2L,
                 timestamp = now,
-                userCommand = "Open YouTube",
+                userCommand = "JARVIS, take a screenshot",
                 isVoiceOrigin = true,
                 response = sample2,
                 rawJson = sample2.toRawJsonString(pretty = true),
                 executionResult = ExecutionResult(
                     executed = true,
-                    actionSummary = "Target Package: com.google.android.youtube",
-                    technicalDetail = "Configured for PackageManager launch intent resolution.",
-                    shellCommandTrace = "monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1"
+                    actionSummary = "Accessibility Global Action: SCREENSHOT",
+                    technicalDetail = "Configured for JarvisAccessibilityService.performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT).",
+                    shellCommandTrace = "AccessibilityService.performGlobalAction(screenshot)"
                 )
             ),
             CommandLogEntry(
                 id = 1L,
                 timestamp = now,
-                userCommand = "Who won the match yesterday?",
+                userCommand = "JARVIS, play some music",
                 isVoiceOrigin = true,
                 response = sample3,
                 rawJson = sample3.toRawJsonString(pretty = true),
                 executionResult = ExecutionResult(
                     executed = true,
-                    actionSummary = "Voice Synthesis & Dialogue Response",
-                    technicalDetail = "Spoken via Android TextToSpeech engine.",
-                    shellCommandTrace = "# general_response -> TTS output only"
+                    actionSummary = "Media Transport: PLAY (KeyCode 126)",
+                    technicalDetail = "Dispatched KeyEvent.KEYCODE_MEDIA_PLAY via AudioManager.",
+                    shellCommandTrace = "input keyevent 126"
                 )
             )
         )

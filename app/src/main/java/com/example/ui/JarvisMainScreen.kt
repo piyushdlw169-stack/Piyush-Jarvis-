@@ -10,7 +10,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,6 +38,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsInputComponent
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
@@ -104,6 +104,9 @@ fun JarvisMainScreen(
     val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
     val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val commandLogs by viewModel.commandLogs.collectAsStateWithLifecycle()
+    val savedApiKey by viewModel.savedApiKey.collectAsStateWithLifecycle()
+    val voicePitch by viewModel.voicePitch.collectAsStateWithLifecycle()
+    val voiceRate by viewModel.voiceRate.collectAsStateWithLifecycle()
 
     val isListening by viewModel.voiceManager.isListening.collectAsStateWithLifecycle()
     val isSpeaking by viewModel.voiceManager.isSpeaking.collectAsStateWithLifecycle()
@@ -111,7 +114,6 @@ fun JarvisMainScreen(
     val audioRmsLevel by viewModel.voiceManager.audioRmsLevel.collectAsStateWithLifecycle()
     val ttsEnabled by viewModel.voiceManager.ttsEnabled.collectAsStateWithLifecycle()
 
-    // BackHandler for secondary tabs per navigation guidelines
     if (selectedTab != JarvisTab.CONSOLE) {
         BackHandler {
             viewModel.selectTab(JarvisTab.CONSOLE)
@@ -144,7 +146,7 @@ fun JarvisMainScreen(
         }
     }
 
-    val latestSpeakText = commandLogs.firstOrNull()?.response?.speak
+    val latestSpeakText = commandLogs.firstOrNull()?.response?.speech
         ?: "JARVIS AI system online. Listening for commands, Sir."
 
     BoxWithConstraints(
@@ -167,7 +169,6 @@ fun JarvisMainScreen(
             }
         ) { innerPadding ->
             if (isExpandedTablet) {
-                // Canonical Tablet Split-Screen Layout with NavigationRail
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -178,7 +179,6 @@ fun JarvisMainScreen(
                         onSelectTab = viewModel::selectTab
                     )
 
-                    // Left Tactical Core & Telemetry Pane
                     Column(
                         modifier = Modifier
                             .weight(0.42f)
@@ -211,7 +211,6 @@ fun JarvisMainScreen(
                         )
                     }
 
-                    // Right Main Workspace Pane
                     Column(
                         modifier = Modifier
                             .weight(0.58f)
@@ -250,11 +249,21 @@ fun JarvisMainScreen(
                             JarvisTab.SCHEMA_INSPECTOR -> {
                                 SchemaInspectorScreen()
                             }
+                            JarvisTab.SETTINGS -> {
+                                SettingsScreen(
+                                    isAccessibilityConnected = telemetry.isAccessibilityConnected,
+                                    savedApiKey = savedApiKey,
+                                    voicePitch = voicePitch,
+                                    voiceRate = voiceRate,
+                                    onSaveApiKey = viewModel::saveApiKeyToPrefs,
+                                    onUpdateVoiceTuning = viewModel::updateVoiceTuning,
+                                    onTestVoice = viewModel.voiceManager::speak
+                                )
+                            }
                         }
                     }
                 }
             } else {
-                // Handheld / Compact Portrait Mode
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -318,6 +327,17 @@ fun JarvisMainScreen(
                         JarvisTab.SCHEMA_INSPECTOR -> {
                             SchemaInspectorScreen()
                         }
+                        JarvisTab.SETTINGS -> {
+                            SettingsScreen(
+                                isAccessibilityConnected = telemetry.isAccessibilityConnected,
+                                savedApiKey = savedApiKey,
+                                voicePitch = voicePitch,
+                                voiceRate = voiceRate,
+                                onSaveApiKey = viewModel::saveApiKeyToPrefs,
+                                onUpdateVoiceTuning = viewModel::updateVoiceTuning,
+                                onTestVoice = viewModel.voiceManager::speak
+                            )
+                        }
                     }
                 }
             }
@@ -346,7 +366,6 @@ private fun CommandConsolePane(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Status banners for Processing, Standby, or Error
         AnimatedVisibility(visible = aiState is JarvisAiState.Processing) {
             val processingCmd = (aiState as? JarvisAiState.Processing)?.command.orEmpty()
             Surface(
@@ -366,7 +385,7 @@ private fun CommandConsolePane(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Translating command to JSON intent: \"$processingCmd\"…",
+                        text = "Translating command to JSON action: \"$processingCmd\"…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = IceWhiteText
                     )
@@ -451,7 +470,6 @@ private fun CommandConsolePane(
             }
         }
 
-        // Scrollable Command Feed (with optional header for compact portrait mode)
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -474,7 +492,7 @@ private fun CommandConsolePane(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "QUICK VOICE / INTENT PRESETS",
+                            text = "QUICK VOICE / ACTION PRESETS",
                             style = MaterialTheme.typography.labelMedium,
                             color = ArcCyan
                         )
@@ -538,7 +556,6 @@ private fun CommandConsolePane(
             }
         }
 
-        // Bottom Voice & Text Command Input Dock
         Surface(
             color = DeepNavySurface,
             border = BorderStroke(1.dp, HudGlassBorder),
@@ -574,7 +591,7 @@ private fun CommandConsolePane(
                     onValueChange = onUpdateInput,
                     placeholder = {
                         Text(
-                            text = "Speak or type command (e.g., \"Play some music\", \"Open YouTube\")…",
+                            text = "Speak or type command (e.g., \"Take a screenshot\", \"Open YouTube\")…",
                             style = MaterialTheme.typography.bodyMedium,
                             color = SteelCyanText
                         )
@@ -714,7 +731,7 @@ private fun JarvisBottomNavigationBar(
                     contentDescription = "System Capabilities"
                 )
             },
-            label = { Text("Capabilities") },
+            label = { Text("Controls") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = ObsidianBg,
                 selectedTextColor = ArcCyan,
@@ -733,7 +750,7 @@ private fun JarvisBottomNavigationBar(
                     contentDescription = "JSON Schema"
                 )
             },
-            label = { Text("JSON Schema") },
+            label = { Text("Schema") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = ObsidianBg,
                 selectedTextColor = ArcCyan,
@@ -742,6 +759,25 @@ private fun JarvisBottomNavigationBar(
                 unselectedTextColor = SteelCyanText
             ),
             modifier = Modifier.testTag("nav_tab_schema")
+        )
+        NavigationBarItem(
+            selected = selectedTab == JarvisTab.SETTINGS,
+            onClick = { onSelectTab(JarvisTab.SETTINGS) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings & Accessibility"
+                )
+            },
+            label = { Text("Settings") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = ObsidianBg,
+                selectedTextColor = ArcCyan,
+                indicatorColor = ArcCyan,
+                unselectedIconColor = SteelCyanText,
+                unselectedTextColor = SteelCyanText
+            ),
+            modifier = Modifier.testTag("nav_tab_settings")
         )
     }
 }
@@ -814,6 +850,26 @@ private fun JarvisSideNavigationRail(
                 unselectedTextColor = SteelCyanText
             ),
             modifier = Modifier.testTag("rail_tab_schema")
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        NavigationRailItem(
+            selected = selectedTab == JarvisTab.SETTINGS,
+            onClick = { onSelectTab(JarvisTab.SETTINGS) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings"
+                )
+            },
+            label = { Text("Settings") },
+            colors = NavigationRailItemDefaults.colors(
+                selectedIconColor = ObsidianBg,
+                selectedTextColor = ArcCyan,
+                indicatorColor = ArcCyan,
+                unselectedIconColor = SteelCyanText,
+                unselectedTextColor = SteelCyanText
+            ),
+            modifier = Modifier.testTag("rail_tab_settings")
         )
     }
 }

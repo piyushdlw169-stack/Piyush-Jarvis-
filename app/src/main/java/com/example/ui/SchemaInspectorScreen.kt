@@ -50,9 +50,9 @@ fun SchemaInspectorScreen(
     val context = LocalContext.current
     val jsonSchemaDisplay = """
 {
-  "intent": "open_app | media_control | adjust_volume | device_status | type_text | general_response",
-  "parameter": "value_or_null",
-  "speak": "What JARVIS will say back to the user"
+  "action": "open_app | global_action | adjust_volume | flashlight | tap | swipe | media_control | device_status | type_text | chat",
+  "target": "value_or_null",
+  "speech": "What JARVIS speaks out loud to the user"
 }
     """.trimIndent()
 
@@ -81,7 +81,9 @@ fun SchemaInspectorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(
                                 text = "ENFORCED GEMINI JSON SCHEMA CONTRACT",
                                 style = MaterialTheme.typography.titleMedium,
@@ -133,7 +135,7 @@ fun SchemaInspectorScreen(
 
         item {
             Text(
-                text = "REGISTERED SYSTEM CAPABILITIES (6)",
+                text = "REGISTERED SYSTEM & ACCESSIBILITY ACTIONS (${JarvisIntentType.entries.size})",
                 style = MaterialTheme.typography.titleMedium,
                 color = IceWhiteText,
                 fontWeight = FontWeight.Bold
@@ -156,7 +158,7 @@ fun SchemaInspectorScreen(
                     Text(
                         text = capability.signature,
                         fontFamily = JetBrainsMonoFontFamily,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = ArcCyan
                     )

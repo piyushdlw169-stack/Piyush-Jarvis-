@@ -9,70 +9,112 @@ enum class JarvisIntentType(
     OPEN_APP(
         wireName = "open_app",
         title = "Launch Application",
-        signature = "open_app(app_package_name)",
-        description = "Resolves and launches an Android application by package name or label."
+        signature = "action: \"open_app\" | target: \"<app_name_or_package>\"",
+        description = "Resolves and launches any installed Android application by name or package via PackageManager."
     ),
-    MEDIA_CONTROL(
-        wireName = "media_control",
-        title = "Media Transport",
-        signature = "media_control(action) -> \"play\" | \"pause\" | \"next\" | \"previous\"",
-        description = "Dispatches hardware media key events (KeyEvent 126/127/87/88) to AudioManager."
+    GLOBAL_ACTION(
+        wireName = "global_action",
+        title = "Accessibility Global Action",
+        signature = "action: \"global_action\" | target: \"home\" | \"back\" | \"recents\" | \"notifications\" | \"screenshot\"",
+        description = "Executes system-wide navigation or screenshot via JarvisAccessibilityService.performGlobalAction()."
     ),
     ADJUST_VOLUME(
         wireName = "adjust_volume",
         title = "Audio Stream Control",
-        signature = "adjust_volume(direction) -> \"up\" | \"down\" | \"mute\"",
-        description = "Adjusts STREAM_MUSIC volume via AudioManager with live hardware UI feedback."
+        signature = "action: \"adjust_volume\" | target: \"up\" | \"down\" | \"mute\" | \"ring_up\" | \"ring_down\"",
+        description = "Adjusts STREAM_MUSIC or STREAM_RING volume via AudioManager with hardware UI feedback."
+    ),
+    FLASHLIGHT(
+        wireName = "flashlight",
+        title = "Hardware Torch Control",
+        signature = "action: \"flashlight\" | target: \"on\" | \"off\" | \"toggle\"",
+        description = "Toggles the device camera flashlight via CameraManager.setTorchMode()."
+    ),
+    TAP(
+        wireName = "tap",
+        title = "Screen Tap Gesture",
+        signature = "action: \"tap\" | target: \"<x>,<y>\"",
+        description = "Dispatches a precision screen tap gesture at (x, y) via AccessibilityService.dispatchGesture()."
+    ),
+    SWIPE(
+        wireName = "swipe",
+        title = "Screen Swipe Gesture",
+        signature = "action: \"swipe\" | target: \"up\" | \"down\" | \"left\" | \"right\" | \"x1,y1,x2,y2\"",
+        description = "Dispatches a smooth swipe path across the screen via AccessibilityService.dispatchGesture()."
+    ),
+    MEDIA_CONTROL(
+        wireName = "media_control",
+        title = "Media Transport",
+        signature = "action: \"media_control\" | target: \"play\" | \"pause\" | \"next\" | \"previous\"",
+        description = "Dispatches hardware media key events (KeyEvent 126/127/87/88) to AudioManager."
     ),
     DEVICE_STATUS(
         wireName = "device_status",
         title = "Device Diagnostics",
-        signature = "device_status() -> null | \"battery\" | \"time\"",
+        signature = "action: \"device_status\" | target: \"battery\" | \"time\" | null",
         description = "Reads real-time BatteryManager telemetry, charging voltage/temp, and local clock."
     ),
     TYPE_TEXT(
         wireName = "type_text",
         title = "Active Text Injection",
-        signature = "type_text(text)",
+        signature = "action: \"type_text\" | target: \"<text>\"",
         description = "Types text into the active HUD input buffer and copies to system ClipboardManager."
     ),
     GENERAL_RESPONSE(
-        wireName = "general_response",
+        wireName = "chat",
         title = "Conversational AI",
-        signature = "general_response(text) -> parameter: null",
-        description = "Answers general queries and synthesizes spoken feedback via Android TTS."
+        signature = "action: \"chat\" | target: null",
+        description = "Answers general queries and synthesizes spoken feedback via Android TextToSpeech."
     );
 
     companion object {
         fun fromWireName(name: String?): JarvisIntentType {
-            return entries.firstOrNull { it.wireName.equals(name?.trim(), ignoreCase = true) }
-                ?: GENERAL_RESPONSE
+            val cleaned = name?.trim()?.lowercase() ?: return GENERAL_RESPONSE
+            return when (cleaned) {
+                "open_app", "launch_app" -> OPEN_APP
+                "global_action", "system_action", "navigate" -> GLOBAL_ACTION
+                "adjust_volume", "volume" -> ADJUST_VOLUME
+                "flashlight", "torch" -> FLASHLIGHT
+                "tap", "click" -> TAP
+                "swipe", "scroll" -> SWIPE
+                "media_control", "media" -> MEDIA_CONTROL
+                "device_status", "status", "battery" -> DEVICE_STATUS
+                "type_text", "type" -> TYPE_TEXT
+                "chat", "general_response", "none" -> GENERAL_RESPONSE
+                else -> entries.firstOrNull { it.wireName.equals(cleaned, ignoreCase = true) }
+                    ?: GENERAL_RESPONSE
+            }
         }
     }
 }
 
 data class JarvisResponse(
-    val intent: String,
-    val parameter: String?,
-    val speak: String
+    val action: String,
+    val target: String?,
+    val speech: String
 ) {
+    // Compatibility properties for intent/parameter/speak callers
+    val intent: String get() = action
+    val parameter: String? get() = target
+    val speak: String get() = speech
+
     val intentType: JarvisIntentType
-        get() = JarvisIntentType.fromWireName(intent)
+        get() = JarvisIntentType.fromWireName(action)
 
     fun toRawJsonString(pretty: Boolean = true): String {
-        val escapedIntent = escapeJson(intent)
-        val paramJson = if (parameter == null) "null" else "\"${escapeJson(parameter)}\""
-        val escapedSpeak = escapeJson(speak)
+        val escapedAction = escapeJson(action)
+        val targetJson = if (target == null) "null" else "\"${escapeJson(target)}\""
+        val escapedSpeech = escapeJson(speech)
         return if (pretty) {
             """
             {
-              "intent": "$escapedIntent",
-              "parameter": $paramJson,
-              "speak": "$escapedSpeak"
+              "action": "$escapedAction",
+              "target": $targetJson,
+              "speech": "$escapedSpeech"
             }
             """.trimIndent()
         } else {
-            """{"intent": "$escapedIntent", "parameter": $paramJson, "speak": "$escapedSpeak"}"""
+            """{"action": "$escapedAction", "target": $targetJson, "speech": "$escapedSpeech"}"""
         }
     }
 
@@ -122,6 +164,8 @@ data class DeviceTelemetrySnapshot(
     val currentTimeFormatted: String = "00:00:00",
     val currentDateFormatted: String = "2026-11-09",
     val mediaPlaybackState: String = "READY",
+    val isFlashlightOn: Boolean = false,
+    val isAccessibilityConnected: Boolean = false,
     val installedAppsCount: Int = 0
 ) {
     val volumePercent: Int
@@ -141,66 +185,71 @@ data class QuickCommandPreset(
 
 object JarvisPromptContract {
     val SYSTEM_INSTRUCTION = """
-        You are JARVIS, a highly advanced AI voice assistant running locally on the user's Android tablet.
-        Your job is to analyze the user's voice command and translate it into a specific system action.
-
-        You have access to the following system capabilities:
-        1. open_app(app_package_name)
-           Common Android package names to use when asked to open an app:
-           - YouTube: "com.google.android.youtube"
-           - Chrome / Browser: "com.android.chrome"
-           - Settings: "com.android.settings"
-           - Gmail / Email: "com.google.android.gm"
-           - Maps: "com.google.android.apps.maps"
-           - Calendar: "com.google.android.calendar"
-           - Calculator: "com.google.android.calculator"
-           - Camera: "com.android.camera2"
-           - Clock / Alarms: "com.google.android.deskclock"
-           - Contacts: "com.google.android.contacts"
-           - Files: "com.google.android.documentsui"
-           - Play Store: "com.android.vending"
-           - Spotify: "com.spotify.music"
-           - Netflix: "com.netflix.mediaclient"
-           - Photos / Gallery: "com.google.android.apps.photos"
-        2. media_control(action) -> actions: "play", "pause", "next", "previous"
-        3. adjust_volume(direction) -> directions: "up", "down", "mute"
-        4. device_status() -> check battery or time (set parameter to "battery", "time", or null)
-        5. type_text(text) -> type text into an active field (set parameter to the exact text to type)
-        6. general_response(text) -> if the user is just chatting or asking a question (set parameter to null)
-
-        CRITICAL: You must always respond in raw JSON format matching this schema:
+        You are JARVIS, a highly advanced AI voice assistant running natively on the user's Android phone/tablet.
+        Analyze the user's spoken or typed command and return ONLY a strict JSON object with the fields:
         {
-          "intent": "capability_name",
-          "parameter": "value_or_null",
-          "speak": "What JARVIS will say back to the user"
+          "action": "open_app | global_action | adjust_volume | flashlight | tap | swipe | media_control | device_status | type_text | chat",
+          "target": "value_or_null",
+          "speech": "What JARVIS speaks out loud to the user"
         }
 
-        Tone Guidelines for "speak":
-        - Speak like J.A.R.V.I.S.: articulate, composed, concise, helpful, and address the user respectfully as "Sir" when appropriate.
+        Supported actions and target values:
+        1. "open_app" -> target: app name or package name (e.g., "YouTube", "com.google.android.youtube", "Settings", "Chrome", "Calculator", "Spotify")
+        2. "global_action" -> target: "home", "back", "recents", "notifications", or "screenshot"
+        3. "adjust_volume" -> target: "up", "down", "mute", "ring_up", or "ring_down"
+        4. "flashlight" -> target: "on", "off", or "toggle"
+        5. "tap" -> target: "x,y" screen coordinates in pixels (e.g., "540,960")
+        6. "swipe" -> target: "up", "down", "left", "right", or "x1,y1,x2,y2"
+        7. "media_control" -> target: "play", "pause", "next", or "previous"
+        8. "device_status" -> target: "battery", "time", or null
+        9. "type_text" -> target: exact text string to type into the active field
+        10. "chat" -> target: null (when the user is chatting or asking a general question)
+
+        Tone Guidelines for "speech":
+        - Speak like J.A.R.V.I.S.: calm, intelligent, concise, and address the user respectfully as "Sir".
         - Examples:
+          User: "JARVIS, open YouTube"
+          Response: {"action": "open_app", "target": "com.google.android.youtube", "speech": "Opening YouTube right away, Sir."}
+          User: "Take a screenshot"
+          Response: {"action": "global_action", "target": "screenshot", "speech": "Capturing your screen now, Sir."}
+          User: "Turn on the flashlight"
+          Response: {"action": "flashlight", "target": "on", "speech": "Flashlight activated, Sir."}
+          User: "Swipe up"
+          Response: {"action": "swipe", "target": "up", "speech": "Scrolling up, Sir."}
           User: "JARVIS, play some music"
-          Response: {"intent": "media_control", "parameter": "play", "speak": "Playing your media, Sir."}
-          User: "Open YouTube"
-          Response: {"intent": "open_app", "parameter": "com.google.android.youtube", "speak": "Opening YouTube right away."}
-          User: "Who won the match yesterday?"
-          Response: {"intent": "general_response", "parameter": null, "speak": "Checking the latest sports data for you, Sir."}
+          Response: {"action": "media_control", "target": "play", "speech": "Playing your media, Sir."}
     """.trimIndent()
 
     val PRESET_COMMANDS = listOf(
         QuickCommandPreset(
+            label = "Open YouTube",
+            command = "JARVIS, open YouTube",
+            category = JarvisIntentType.OPEN_APP
+        ),
+        QuickCommandPreset(
+            label = "Go Home",
+            command = "Go to the home screen",
+            category = JarvisIntentType.GLOBAL_ACTION
+        ),
+        QuickCommandPreset(
+            label = "Take Screenshot",
+            command = "JARVIS, take a screenshot",
+            category = JarvisIntentType.GLOBAL_ACTION
+        ),
+        QuickCommandPreset(
+            label = "Flashlight On",
+            command = "Turn on the flashlight",
+            category = JarvisIntentType.FLASHLIGHT
+        ),
+        QuickCommandPreset(
+            label = "Swipe Up",
+            command = "Swipe up on the screen",
+            category = JarvisIntentType.SWIPE
+        ),
+        QuickCommandPreset(
             label = "Play Music",
             command = "JARVIS, play some music",
             category = JarvisIntentType.MEDIA_CONTROL
-        ),
-        QuickCommandPreset(
-            label = "Open YouTube",
-            command = "Open YouTube",
-            category = JarvisIntentType.OPEN_APP
-        ),
-        QuickCommandPreset(
-            label = "Open Settings",
-            command = "JARVIS, open Android Settings",
-            category = JarvisIntentType.OPEN_APP
         ),
         QuickCommandPreset(
             label = "Volume Up",
@@ -208,24 +257,9 @@ object JarvisPromptContract {
             category = JarvisIntentType.ADJUST_VOLUME
         ),
         QuickCommandPreset(
-            label = "Mute Audio",
-            command = "Mute the tablet audio",
-            category = JarvisIntentType.ADJUST_VOLUME
-        ),
-        QuickCommandPreset(
-            label = "Battery & Time",
+            label = "Battery Status",
             command = "What is my battery level and current time?",
             category = JarvisIntentType.DEVICE_STATUS
-        ),
-        QuickCommandPreset(
-            label = "Type Note",
-            command = "Type text: Diagnostic scan complete. All thrusters nominal.",
-            category = JarvisIntentType.TYPE_TEXT
-        ),
-        QuickCommandPreset(
-            label = "General Query",
-            command = "Who won the match yesterday?",
-            category = JarvisIntentType.GENERAL_RESPONSE
         )
     )
 }

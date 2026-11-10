@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,11 +31,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
@@ -190,14 +190,21 @@ fun TelemetryHeaderBar(
                     tint = ArcCyan
                 )
                 TelemetryPill(
+                    icon = Icons.Default.AccessibilityNew,
+                    label = if (telemetry.isAccessibilityConnected) "A11Y: ACTIVE" else "A11Y: READY",
+                    tint = if (telemetry.isAccessibilityConnected) TelemetryEmerald else AmberWarning
+                )
+                if (telemetry.isFlashlightOn) {
+                    TelemetryPill(
+                        icon = Icons.Default.FlashlightOn,
+                        label = "TORCH: ON",
+                        tint = AmberWarning
+                    )
+                }
+                TelemetryPill(
                     icon = Icons.Default.Schedule,
                     label = telemetry.currentTimeFormatted,
                     tint = IceWhiteText
-                )
-                TelemetryPill(
-                    icon = Icons.Default.GraphicEq,
-                    label = "MEDIA: ${telemetry.mediaPlaybackState}",
-                    tint = ElectricCobalt
                 )
             }
         }
@@ -338,7 +345,7 @@ fun ArcReactorVisualizerCard(
                         color = ArcCyan
                     )
                     Text(
-                        text = if (isListening) "MIC LIVE" else "TAP CORE TO SPEAK",
+                        text = if (isListening) "MIC LIVE" else "TAP ORB TO SPEAK",
                         style = MaterialTheme.typography.labelMedium,
                         color = coreColor
                     )
@@ -478,8 +485,11 @@ fun CommandLogCard(
     val context = LocalContext.current
     val intentBadgeColor = when (entry.response.intentType) {
         JarvisIntentType.OPEN_APP -> ElectricCobalt
-        JarvisIntentType.MEDIA_CONTROL -> ArcCyan
+        JarvisIntentType.GLOBAL_ACTION -> ArcCyan
         JarvisIntentType.ADJUST_VOLUME -> TelemetryEmerald
+        JarvisIntentType.FLASHLIGHT -> AmberWarning
+        JarvisIntentType.TAP, JarvisIntentType.SWIPE -> Color(0xFFFF80AB)
+        JarvisIntentType.MEDIA_CONTROL -> ArcCyan
         JarvisIntentType.DEVICE_STATUS -> AmberWarning
         JarvisIntentType.TYPE_TEXT -> Color(0xFFE040FB)
         JarvisIntentType.GENERAL_RESPONSE -> SteelCyanText
@@ -547,7 +557,7 @@ fun CommandLogCard(
                 }
             }
 
-            // Intent & Parameter Badges
+            // Action & Target Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -559,7 +569,7 @@ fun CommandLogCard(
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        text = "intent: ${entry.response.intent}",
+                        text = "action: ${entry.response.action}",
                         style = MaterialTheme.typography.labelMedium,
                         color = intentBadgeColor,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -572,7 +582,7 @@ fun CommandLogCard(
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        text = "param: ${entry.response.parameter ?: "null"}",
+                        text = "target: ${entry.response.target ?: "null"}",
                         style = MaterialTheme.typography.labelMedium,
                         color = IceWhiteText,
                         maxLines = 1,
@@ -588,7 +598,7 @@ fun CommandLogCard(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onReplaySpeak(entry.response.speak) }
+                    .clickable { onReplaySpeak(entry.response.speech) }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -607,7 +617,7 @@ fun CommandLogCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = entry.response.speak,
+                            text = entry.response.speech,
                             style = MaterialTheme.typography.bodyMedium,
                             color = IceWhiteText
                         )
@@ -726,7 +736,7 @@ fun CommandLogCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Terminal,
-                            contentDescription = "Shell equivalent",
+                            contentDescription = "Execution trace",
                             tint = ArcCyan,
                             modifier = Modifier.size(13.dp)
                         )

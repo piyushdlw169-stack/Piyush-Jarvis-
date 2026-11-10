@@ -78,6 +78,13 @@ class JarvisVoiceManager(
         }
     }
 
+    fun setVoiceTuning(pitch: Float, rate: Float) {
+        runCatching {
+            tts?.setPitch(pitch)
+            tts?.setSpeechRate(rate)
+        }
+    }
+
     fun setTtsEnabled(enabled: Boolean) {
         _ttsEnabled.value = enabled
         if (!enabled) {

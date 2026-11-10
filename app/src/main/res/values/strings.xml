@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Jarvis Command</string>
+    <string name="accessibility_service_description">Allows JARVIS to perform global navigation actions (Home, Back, Recents, Notifications, Screenshot) and touch gestures (Tap, Swipe) by voice command.</string>
     <string name="hud_title">JARVIS // TACTICAL OS</string>
     <string name="hud_subtitle">LOCAL TABLET AI VOICE &amp; INTENT EXECUTOR</string>
     <string name="status_online">SYSTEMS ONLINE</string>
@@ -9,6 +10,7 @@
     <string name="tab_console">Command Console</string>
     <string name="tab_capabilities">Capabilities &amp; Controls</string>
     <string name="tab_inspector">JSON Schema &amp; Logs</string>
+    <string name="tab_settings">Settings &amp; Service</string>
     <string name="input_placeholder">Speak or type command to JARVIS (e.g. \"Play some music\")…</string>
     <string name="send_command">Execute</string>
     <string name="voice_command">Voice Input</string>
