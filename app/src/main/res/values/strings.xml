@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Jarvis Command</string>
+    <string name="hud_title">JARVIS // TACTICAL OS</string>
+    <string name="hud_subtitle">LOCAL TABLET AI VOICE &amp; INTENT EXECUTOR</string>
+    <string name="status_online">SYSTEMS ONLINE</string>
+    <string name="status_standby">STANDBY MODE</string>
+    <string name="status_listening">LISTENING FOR VOICE COMMAND…</string>
+    <string name="status_processing">ANALYZING VOICE INTENT…</string>
+    <string name="tab_console">Command Console</string>
+    <string name="tab_capabilities">Capabilities &amp; Controls</string>
+    <string name="tab_inspector">JSON Schema &amp; Logs</string>
+    <string name="input_placeholder">Speak or type command to JARVIS (e.g. \"Play some music\")…</string>
+    <string name="send_command">Execute</string>
+    <string name="voice_command">Voice Input</string>
+    <string name="tts_toggle">Voice Output</string>
+    <string name="scratchpad_title">ACTIVE TEXT BUFFER (type_text target)</string>
+    <string name="scratchpad_hint">Text typed by JARVIS via type_text(text) appears here and copies to clipboard…</string>
+    <string name="clear_logs">Clear Log</string>
+    <string name="wake_systems">Wake Core Systems</string>
+</resources>

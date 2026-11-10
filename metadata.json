@@ -1,0 +1,6 @@
+{
+  "name": "Jarvis Command",
+  "description": "AI voice assistant and tablet command console translating voice and text commands into structured JSON intents and real Android system actions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
